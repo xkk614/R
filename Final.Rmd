@@ -1,0 +1,94 @@
+---
+title: "Group4_Final"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Import Block
+```{r}
+library(class)
+library(ggbiplot)
+library(factoextra)
+library(dplyr)
+library(lessR)
+library(ggpubr)
+library(tidyverse)
+library(broom)
+library(ggplot2)
+library(MASS)
+library(jtools)
+library(caret)
+```
+```{r}
+install.packages(ggbipolt)
+```
+
+##Read Block
+```{r}
+test <- read.csv("test.csv", 
+                 header = T,
+                 sep = ",")
+
+train <- read.csv("train.csv", 
+                 header = T,
+                 sep = ",")
+
+train_clean <- train
+test_clean <- test
+```
+
+##Null/Outlier Analysis and Handling
+
+The below function is utilized because summary() fails to account for NA values in character class columns.
+```{r}
+apply(train,2,function(x) sum(is.na(x))) #Returns number of nulls per column.
+apply(test,2,function(x) sum(is.na(x)))
+```
+Already we can see there are significant nulls in a few variables. Fence, MiscFeature, PoolQC, Alley, and FireplaceQu all have high levels of null values. We can probably omit some of these features, because imputation will be nearly meaningless in these cases. The below functions were written to prune columns with excess null values (greater than 75% of total column data)
+
+```{r}
+train_clean <- train[, which(colMeans(!is.na(train)) > 0.75)] #This value can be adjusted to be more or less punitive.
+test_clean <- test[, which(colMeans(!is.na(test)) > 0.75)]
+```
+
+In the following step we prepare dummy columns for all our categorical data. We'll use the One-Hot Encoding method here to further reduce the number of dummy variables, given that these categorical columns contain more than binary information.
+```{r}
+#categorical_columns <- c("MSZoning", "Street", "LotShape", "LandContour", "Utilities", "LotConfig", "LandSlope", "Neighborhood", "Condition1", "Condition2", "BldgType", "HouseStyle", "YearBuilt", "YearRemodAdd", "RoofStyle", "RoofMatl", "Exterior1st", "Exterior2nd", "MasVnrType", "ExterQual", "ExterCond", "Foundation", "BsmtQual","BsmtCond", "BsmtExposure", "BsmtFinType1","BsmtFinType2", "Heating", "HeatingQC", "CentralAir", "Electrical")
+dummy_train <- dummyVars("~ .", data = train_clean)
+dummy_test <- dummyVars("~ .", data = test_clean)
+
+train_clean <- data.frame(predict(dummy_train, newdata = train_clean))
+test_clean <- data.frame(predict(dummy_test, newdata = test_clean))
+```
+
+
+
+
+DO NOT USE CODE IN THIS BLOCK!!! Outlier function is too aggressive. Saving for later.
+```{r}
+num_train <- select_if(train_clean, is.numeric) #Determines only numeric columns for outlier cleaning
+num_test <- select_if(test_clean, is.numeric)
+  
+outliers <- function(x){
+  Q1 <- quantile(x, probs = .25)
+  Q3 <- quantile(x, probs = .75)
+  iqr <- Q3-Q1
+  
+  ul = Q3+(iqr*1.5)
+  ll = Q1-(iqr*1.5)
+    
+  x > ul | x < ll
+}
+  
+clean_outliers <- function(df){
+  for (col in names(df)){
+    df <- df[!outliers(df[[col]]),]
+  }
+  df
+}
+train_clean <- clean_outliers(num_train)
+test_clean <- clean_outliers(num_test)
+```
